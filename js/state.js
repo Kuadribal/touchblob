@@ -71,6 +71,10 @@ class BlobState {
       case 'squish':
         this.stats.mood = Math.min(100, this.stats.mood + 2);
         break;
+      case 'poke':
+        this.stats.mood = Math.min(100, this.stats.mood + 3);
+        this.stats.energy = Math.max(0, this.stats.energy - 2);
+        break;
     }
     
     this.save();

@@ -1,4 +1,4 @@
-// Blob - Main character rendering and behavior
+// Blob - Main character rendering and behavior with enhanced interactions
 
 class Blob {
   constructor(canvas, state, animations) {
@@ -13,20 +13,53 @@ class Blob {
     this.targetX = this.x;
     this.targetY = this.y;
     
+    // Follow finger/mouse
+    this.followX = null;
+    this.followY = null;
+    this.isFollowing = false;
+    this.followSpeed = 0.12;
+    
+    // Drag
+    this.isDragging = false;
+    this.dragOffsetX = 0;
+    this.dragOffsetY = 0;
+    this.flingVelocityX = 0;
+    this.flingVelocityY = 0;
+    
+    // Petting
+    this.isPettingActive = false;
+    this.happiness = 0;
+    this.maxHappiness = 100;
+    this.petParticlesSpawned = 0;
+    
     // Physics
     this.vx = 0;
     this.vy = 0;
     this.gravity = 0.5;
-    this.friction = 0.9;
+    this.friction = 0.92;
+    this.groundFriction = 0.85;
     
-    // Animation state
+    // Squash and stretch
     this.scaleX = 1;
     this.scaleY = 1;
+    this.targetScaleX = 1;
+    this.targetScaleY = 1;
+    this.squashAmount = 0;
+    this.stretchAmount = 0;
+    
+    // Rotation
     this.rotation = 0;
+    this.targetRotation = 0;
     
     // Current action
     this.action = 'idle';
     this.actionTimer = 0;
+    this.previousAction = 'idle';
+    
+    // Animation crossfade
+    this.currentFrame = null;
+    this.previousFrame = null;
+    this.frameBlend = 0;
     
     // Custom color
     this.customColor = null;
@@ -36,17 +69,179 @@ class Blob {
     this.idleWobble = 0;
     this.idleBreathPhase = 0;
     
+    // Shadow
+    this.shadowScale = 1;
+    this.shadowAlpha = 0.3;
+    
     // Micro-interaction states
     this.isHappy = false;
     this.isTired = false;
     this.isHungry = false;
+    
+    // Poke reaction
+    this.pokeReaction = 0;
   }
 
   resize() {
     this.x = this.canvas.width / 2;
-    this.y = this.canvas.height / 2;
+    this.y = this.canvas.height * 0.6;
     this.targetX = this.x;
     this.targetY = this.y;
+  }
+
+  // === NEW INTERACTION HANDLERS ===
+  
+  onTouchStart(x, y) {
+    const dist = Math.sqrt(Math.pow(x - this.x, 2) + Math.pow(y - this.y, 2));
+    if (dist < 100) {
+      // Start following finger
+      this.isFollowing = true;
+      this.followX = x;
+      this.followY = y;
+    }
+  }
+
+  onDragStart() {
+    if (!this.isDragging) {
+      this.isDragging = true;
+      this.action = 'drag';
+      // Squash when grabbed
+      this.applySquash(0.7, 1.3);
+    }
+  }
+
+  onDrag(x, y) {
+    if (this.isDragging) {
+      // Calculate velocity for fling
+      const dx = x - this.x;
+      const dy = y - this.y;
+      
+      // Move blob with finger (with some lag for smoothness)
+      this.x += dx * 0.3;
+      this.y += dy * 0.3;
+      
+      // Tilt based on movement direction
+      this.targetRotation = dx * 0.01;
+    }
+  }
+
+  onDragEnd(x, y, vx, vy) {
+    if (this.isDragging) {
+      this.isDragging = false;
+      
+      // Apply fling velocity
+      this.flingVelocityX = vx * 2;
+      this.flingVelocityY = vy * 2;
+      
+      // Stretch in direction of fling
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      const stretchAmount = Math.min(0.4, speed * 0.05);
+      this.applySquash(1 - stretchAmount, 1 + stretchAmount);
+      
+      // Show fling feedback
+      const app = window.app;
+      if (app && app.ui) {
+        app.ui.showFeedback('💫', x, y);
+      }
+      
+      this.action = 'idle';
+    }
+  }
+
+  onTouchEnd(x, y) {
+    // Stop following
+    this.isFollowing = false;
+    this.followX = null;
+    this.followY = null;
+    
+    // Stop dragging
+    if (this.isDragging) {
+      this.isDragging = false;
+      this.action = 'idle';
+    }
+  }
+
+  onPoke(x, y) {
+    if (this.action !== 'idle' && this.action !== 'poke') return;
+    
+    // Poke reaction - quick squash and bounce
+    this.action = 'poke';
+    this.pokeReaction = 1;
+    this.applySquash(0.8, 1.2);
+    this.vy = -5;
+    
+    // Push away from poke direction
+    const dx = this.x - x;
+    const pushDir = dx > 0 ? 1 : -1;
+    this.vx = pushDir * 3;
+    
+    // Different emoji based on mood
+    let emoji = '😮';
+    const mood = this.state.stats.mood;
+    if (mood > 80) emoji = '😄';
+    else if (mood < 30) emoji = '😢';
+    else if (this.isTired) emoji = '😴';
+    
+    // Visual feedback - ripple effect
+    const app = window.app;
+    if (app) {
+      if (app.ui) app.ui.showFeedback(emoji, x, y - 30);
+      if (app.screenShake) app.screenShake.shake(3);
+      if (app.rippleEffect) app.rippleEffect(x, y);
+    }
+    
+    this.state.interact('poke');
+    this.actionTimer = 200;
+  }
+
+  onLongPress() {
+    this.squish();
+    const app = window.app;
+    if (app && app.particles) app.particles.squishEffect(this.x, this.y);
+  }
+
+  onPet(x, y) {
+    this.isPettingActive = true;
+    this.happiness = Math.min(this.maxHappiness, this.happiness + 2);
+    
+    // Happy particles
+    const app = window.app;
+    if (app && app.particles && this.petParticlesSpawned % 10 === 0) {
+      app.particles.emit(x, y - 30, {
+        count: 3,
+        speed: 2,
+        size: 4,
+        color: '#FFD700',
+        life: 0.5,
+        decay: 0.03,
+        gravity: -0.1
+      });
+    }
+    this.petParticlesSpawned++;
+    
+    // Happy feedback
+    if (this.happiness >= this.maxHappiness) {
+      if (app && app.ui) {
+        app.ui.showFeedback('🥰', x, y - 50);
+        app.ui.spawnFloatingHearts(5);
+      }
+      this.happiness = 0; // Reset after max happiness
+      this.state.stats.mood = Math.min(100, this.state.stats.mood + 15);
+    }
+    
+    // Soft squash while petting
+    this.applySquash(1.05, 0.95);
+  }
+
+  onPetEnd() {
+    this.isPettingActive = false;
+  }
+
+  // === PHYSICS & MOVEMENT ===
+
+  applySquash(x, y) {
+    this.targetScaleX = x;
+    this.targetScaleY = y;
   }
 
   handleGesture(gesture, zone) {
@@ -58,11 +253,9 @@ class Blob {
       case 'tap':
         if (zone === 'top') {
           this.jump(jumpMultiplier);
-          // Particle effect on jump
           if (app && app.particles) app.particles.jumpEffect(this.x, this.y);
         } else if (zone === 'bottom') {
           this.splat();
-          // Particle effect + screen shake on splat
           if (app && app.particles) app.particles.splatEffect(this.x, this.y);
           if (app && app.screenShake) app.screenShake.shake(15);
         } else {
@@ -86,7 +279,6 @@ class Blob {
         
       case 'longpress':
         this.squish();
-        // Particle effect on squish
         if (app && app.particles) app.particles.squishEffect(this.x, this.y);
         break;
     }
@@ -96,12 +288,16 @@ class Blob {
     if (this.action !== 'idle') return;
     
     this.action = 'jump';
+    this.previousAction = 'jump';
     this.vy = -15 * multiplier;
     this.animations.setAnimation('jump');
     this.state.interact('jump');
     this.actionTimer = 500;
     
-    // Micro-interaction: sparkles on jump
+    // Stretch when jumping
+    this.applySquash(0.85, 1.2);
+    
+    // Feedback
     if (window.app && window.app.ui) {
       window.app.ui.showFeedback('🎉', 'center');
       window.app.ui.spawnSparkles(this.x, this.y - 60, 4);
@@ -112,13 +308,13 @@ class Blob {
     if (this.action !== 'idle') return;
     
     this.action = 'splat';
+    this.previousAction = 'splat';
     this.scaleY = 0.5;
     this.scaleX = 1.5;
     this.animations.setAnimation('splat');
     this.state.interact('splat');
     this.actionTimer = 300;
     
-    // Micro-interaction
     if (window.app && window.app.ui) {
       window.app.ui.showFeedback('💥', 'center');
     }
@@ -128,12 +324,15 @@ class Blob {
     if (this.action !== 'idle') return;
     
     this.action = 'slide';
+    this.previousAction = 'slide';
     this.vx = direction * 10;
     this.animations.setAnimation('slide');
     this.state.interact('slide');
     this.actionTimer = 400;
     
-    // Micro-interaction
+    // Lean into slide
+    this.targetRotation = direction * 0.3;
+    
     if (window.app && window.app.ui) {
       window.app.ui.showFeedback(direction > 0 ? '💨→' : '←💨', 'center');
     }
@@ -143,12 +342,12 @@ class Blob {
     if (this.action !== 'idle') return;
     
     this.action = 'squish';
+    this.previousAction = 'squish';
     this.scaleX = 1.3;
     this.scaleY = 0.7;
     this.state.interact('squish');
     this.actionTimer = 500;
     
-    // Micro-interaction: hearts for squish
     if (window.app && window.app.ui) {
       window.app.ui.showFeedback('❤️', 'center');
       window.app.ui.spawnFloatingHearts(3);
@@ -159,7 +358,6 @@ class Blob {
     this.scaleY = 0.9;
     this.scaleX = 1.1;
     
-    // Tiny interaction feedback
     if (window.app && window.app.ui) {
       window.app.ui.spawnSparkles(this.x, this.y - 40, 2);
     }
@@ -175,13 +373,39 @@ class Blob {
     this.isTired = energy < 30;
     this.isHungry = hunger > 80;
     
-    // Ambient idle animations based on stats
-    if (this.action === 'idle') {
-      this.updateIdleAnimation(deltaTime, mood, energy, hunger);
+    // === FOLLOW FINGER ===
+    if (this.isFollowing && this.followX !== null) {
+      // Smooth follow
+      const dx = this.followX - this.x;
+      const dy = this.followY - this.y;
+      
+      this.x += dx * this.followSpeed;
+      this.y += dy * this.followSpeed;
+      
+      // Slight stretch in movement direction
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 10) {
+        const stretch = Math.min(0.15, dist * 0.002);
+        const angle = Math.atan2(dy, dx);
+        this.targetScaleX = 1 + stretch * Math.abs(Math.cos(angle));
+        this.targetScaleY = 1 - stretch * 0.3 * Math.abs(Math.sin(angle));
+      }
     }
     
-    // Physics
-    this.vy += this.gravity;
+    // === FLING VELOCITY ===
+    if (Math.abs(this.flingVelocityX) > 0.5 || Math.abs(this.flingVelocityY) > 0.5) {
+      this.x += this.flingVelocityX;
+      this.y += this.flingVelocityY;
+      this.flingVelocityX *= 0.95;
+      this.flingVelocityY *= 0.95;
+    }
+    
+    // === PHYSICS ===
+    // Apply gravity when not dragging or following
+    if (!this.isDragging && !this.isFollowing) {
+      this.vy += this.gravity;
+    }
+    
     this.x += this.vx;
     this.y += this.vy;
     
@@ -191,11 +415,11 @@ class Blob {
       this.y = groundY;
       
       if (this.vy > 5) {
-        // Landed from jump - small splat
-        this.scaleY = 0.8;
-        this.scaleX = 1.2;
+        // Landed from jump - squash
+        const impactSquash = Math.min(0.3, (this.vy - 5) * 0.05);
+        this.applySquash(1 + impactSquash, 1 - impactSquash);
         
-        // Small impact particles on landing
+        // Small impact particles
         const app = window.app;
         if (app && app.particles && this.vy > 8) {
           app.particles.emit(this.x, this.y + 30, {
@@ -211,6 +435,7 @@ class Blob {
       }
       
       this.vy = 0;
+      this.vx *= this.groundFriction;
     }
     
     // Friction
@@ -218,60 +443,92 @@ class Blob {
     
     // Screen bounds
     const margin = 50;
-    if (this.x < margin) this.x = margin;
-    if (this.x > this.canvas.width - margin) this.x = this.canvas.width - margin;
+    if (this.x < margin) { this.x = margin; this.vx *= -0.5; }
+    if (this.x > this.canvas.width - margin) { 
+      this.x = this.canvas.width - margin; 
+      this.vx *= -0.5; 
+    }
     
     // Return to center slowly when idle
-    if (this.action === 'idle') {
+    if (this.action === 'idle' && !this.isFollowing && !this.isDragging) {
       this.targetX = this.canvas.width / 2;
       this.x += (this.targetX - this.x) * 0.02;
     }
     
-    // Scale recovery
-    this.scaleX += (1 - this.scaleX) * 0.2;
-    this.scaleY += (1 - this.scaleY) * 0.2;
+    // === SCALE RECOVERY (SQUASH/STRETCH) ===
+    this.scaleX += (this.targetScaleX - this.scaleX) * 0.15;
+    this.scaleY += (this.targetScaleY - this.scaleY) * 0.15;
     
-    // Action timer
+    // Return to normal scale
+    this.targetScaleX += (1 - this.targetScaleX) * 0.1;
+    this.targetScaleY += (1 - this.targetScaleY) * 0.1;
+    
+    // === ROTATION ===
+    this.rotation += (this.targetRotation - this.rotation) * 0.1;
+    this.targetRotation *= 0.9; // Return to upright
+    
+    // === SHADOW ===
+    const heightFromGround = groundY - this.y;
+    const normalizedHeight = Math.min(1, heightFromGround / 200);
+    this.shadowScale = 1 - normalizedHeight * 0.5;
+    this.shadowAlpha = 0.4 - normalizedHeight * 0.3;
+    
+    // === ACTION TIMER ===
     if (this.actionTimer > 0) {
       this.actionTimer -= deltaTime;
       if (this.actionTimer <= 0) {
+        this.previousAction = this.action;
         this.action = 'idle';
         this.animations.setAnimation('idle');
       }
     }
     
-    // Update animations
+    // === AMBIENT IDLE ANIMATION ===
+    if (this.action === 'idle' && !this.isFollowing && !this.isDragging) {
+      this.updateIdleAnimation(deltaTime, mood, energy, hunger);
+    }
+    
+    // === POKE REACTION DECAY ===
+    if (this.pokeReaction > 0) {
+      this.pokeReaction -= deltaTime * 0.005;
+    }
+    
+    // === UPDATE ANIMATIONS ===
     this.animations.update(deltaTime);
+    
+    // === FRAME CROSSFADE ===
+    this.frameBlend = Math.min(1, this.frameBlend + deltaTime * 0.01);
   }
   
   updateIdleAnimation(deltaTime, mood, energy, hunger) {
     this.idleTime += deltaTime;
-    this.idleBreathPhase += deltaTime * 0.002;
+    this.idleBreathPhase += deltaTime * 0.0015; // Slower, more subtle
     
-    // Different idle animations based on stats
+    // More subtle breathing - less extreme
+    const breathAmount = Math.sin(this.idleBreathPhase) * 0.015;
+    
     if (this.isHappy) {
       // Happy: gentle bouncing/wiggling
-      this.idleWobble = Math.sin(this.idleTime * 0.004) * 0.03;
-      this.scaleX = 1 + Math.sin(this.idleTime * 0.003) * 0.02;
-      this.scaleY = 1 - Math.sin(this.idleTime * 0.003) * 0.02;
+      this.idleWobble = Math.sin(this.idleTime * 0.003) * 0.02;
+      this.scaleX = 1 + Math.sin(this.idleTime * 0.002) * 0.015;
+      this.scaleY = 1 - Math.sin(this.idleTime * 0.002) * 0.015;
     } else if (mood < 30) {
       // Sad: slow, droopy movement
-      this.idleWobble = Math.sin(this.idleTime * 0.001) * 0.02;
-      this.scaleY = 1 - Math.abs(Math.sin(this.idleBreathPhase)) * 0.05;
-      this.scaleX = 1 + Math.abs(Math.sin(this.idleBreathPhase)) * 0.03;
+      this.idleWobble = Math.sin(this.idleTime * 0.001) * 0.015;
+      this.scaleY = 1 - Math.abs(Math.sin(this.idleBreathPhase)) * 0.03;
+      this.scaleX = 1 + Math.abs(Math.sin(this.idleBreathPhase)) * 0.02;
     } else if (this.isTired) {
-      // Tired: slow breathing, drooping
-      const breathAmount = Math.sin(this.idleBreathPhase * 0.5) * 0.03;
-      this.scaleY = 1 + breathAmount;
-      this.scaleX = 1 - breathAmount;
-      this.rotation = Math.sin(this.idleTime * 0.001) * 0.05;
+      // Tired: very slow breathing
+      const tiredBreath = Math.sin(this.idleBreathPhase * 0.4) * 0.02;
+      this.scaleY = 1 + tiredBreath;
+      this.scaleX = 1 - tiredBreath;
+      this.rotation = Math.sin(this.idleTime * 0.0008) * 0.03;
     } else if (this.isHungry) {
       // Hungry: jittery, restless
-      this.idleWobble = Math.sin(this.idleTime * 0.01) * 0.04;
-      this.scaleX = 1 + Math.sin(this.idleTime * 0.008) * 0.02;
+      this.idleWobble = Math.sin(this.idleTime * 0.008) * 0.03;
+      this.scaleX = 1 + Math.sin(this.idleTime * 0.006) * 0.015;
     } else {
-      // Normal idle: gentle breathing
-      const breathAmount = Math.sin(this.idleBreathPhase) * 0.02;
+      // Normal idle: subtle breathing only
       this.scaleY = 1 + breathAmount;
       this.scaleX = 1 - breathAmount * 0.5;
     }
@@ -280,17 +537,24 @@ class Blob {
   draw() {
     const ctx = this.ctx;
     
+    // === DRAW SHADOW ===
+    this.drawShadow(ctx);
+    
     ctx.save();
     ctx.translate(this.x, this.y);
     
-    // Scale based on action
+    // Scale based on squash/stretch
     ctx.scale(this.scaleX, this.scaleY);
     
-    // Draw sprite if loaded, otherwise placeholder
+    // Rotation
+    ctx.rotate(this.rotation);
+    
+    // Draw sprite with crossfade, otherwise placeholder
     const frame = this.animations.getCurrentFrame();
     if (frame && frame.complete) {
-      // Draw sprite centered
-      const scale = 4; // Scale up the 48px sprite
+      // Crossfade between animations
+      const scale = 4;
+      ctx.globalAlpha = this.frameBlend;
       ctx.drawImage(
         frame, 
         -frame.width * scale / 2, 
@@ -298,10 +562,42 @@ class Blob {
         frame.width * scale,
         frame.height * scale
       );
+      ctx.globalAlpha = 1;
     } else {
       // Fallback to placeholder
       this.drawPlaceholder(ctx);
     }
+    
+    ctx.restore();
+  }
+  
+  drawShadow(ctx) {
+    const groundY = this.canvas.height * 0.7;
+    const heightFromGround = groundY - this.y;
+    const normalizedHeight = Math.min(1, heightFromGround / 150);
+    
+    // Shadow position and size
+    const shadowX = this.x;
+    const shadowY = groundY + 10;
+    const shadowWidth = 80 * this.shadowScale;
+    const shadowHeight = 15 * this.shadowScale;
+    
+    // Draw soft shadow
+    ctx.save();
+    ctx.globalAlpha = this.shadowAlpha;
+    
+    const gradient = ctx.createRadialGradient(
+      shadowX, shadowY, 0,
+      shadowX, shadowY, shadowWidth
+    );
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.2)');
+    gradient.addColorStop(1, 'transparent');
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.ellipse(shadowX, shadowY, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
+    ctx.fill();
     
     ctx.restore();
   }
@@ -317,7 +613,7 @@ class Blob {
     if (this.customColor) {
       fillColor = this.customColor;
     } else {
-      const hue = 150 + (100 - mood) * 0.5; // Blue-green to sad green
+      const hue = 150 + (100 - mood) * 0.5;
       const saturation = 60 + mood * 0.2;
       const lightness = 50 + (100 - mood) * 0.1;
       fillColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
@@ -327,7 +623,7 @@ class Blob {
     ctx.strokeStyle = this.customColor ? 'rgba(0,0,0,0.3)' : '#000';
     ctx.lineWidth = 3;
     
-    // Apply ambient wobble from idle animation
+    // Apply ambient wobble
     ctx.save();
     ctx.rotate(this.idleWobble || 0);
     
@@ -337,10 +633,10 @@ class Blob {
     ctx.fill();
     ctx.stroke();
     
-    // Eyes - vary based on stats
+    // Eyes
     let eyeOffset = 0;
     let eyeSize = 15;
-    let eyeShape = 'normal'; // normal, droopy, tired
+    let eyeShape = 'normal';
     
     if (mood < 30) {
       eyeOffset = -5;
@@ -350,6 +646,12 @@ class Blob {
       eyeSize = 12;
     } else if (this.isHappy) {
       eyeOffset = 2;
+    }
+    
+    // Poke reaction - wide eyes
+    if (this.pokeReaction > 0.5) {
+      eyeSize = 18;
+      eyeOffset = -3;
     }
     
     ctx.fillStyle = '#fff';
@@ -367,10 +669,10 @@ class Blob {
     ctx.arc(20, -10 + eyeOffset, pupilSize, 0, Math.PI * 2);
     ctx.fill();
     
-    // Eyebrows (for expression)
+    // Eyebrows
     ctx.lineWidth = 2;
-    if (this.isHappy) {
-      // Happy eyebrows
+    if (this.isHappy || this.pokeReaction > 0.5) {
+      // Happy/excited eyebrows
       ctx.beginPath();
       ctx.moveTo(-30, -30);
       ctx.lineTo(-15, -35);
@@ -386,7 +688,7 @@ class Blob {
       ctx.lineTo(15, -30);
       ctx.stroke();
     } else if (energy < 30) {
-      // Tired eyelids (half-closed)
+      // Tired eyelids
       ctx.fillStyle = fillColor;
       ctx.beginPath();
       ctx.ellipse(-20, -10 + eyeOffset, eyeSize, eyeSize * 0.3, 0, 0, Math.PI * 2);
@@ -394,37 +696,35 @@ class Blob {
       ctx.fill();
     }
     
-    // Mouth - varies by mood/energy/hunger
+    // Mouth
     ctx.strokeStyle = this.customColor ? 'rgba(0,0,0,0.5)' : '#000';
     ctx.lineWidth = 3;
     ctx.beginPath();
     
-    if (this.isHappy) {
-      // Big happy smile
+    // Different mouth expressions
+    if (this.isPettingActive || this.pokeReaction > 0.5) {
+      // Happy/open mouth during pet
+      ctx.arc(0, 15, 15, 0, Math.PI);
+    } else if (this.isHappy) {
       ctx.arc(0, 15, 18, 0, Math.PI);
     } else if (mood < 30) {
-      // Sad frown
       ctx.arc(0, 28, 12, Math.PI, 0);
     } else if (energy < 30) {
-      // Tired: small line
       ctx.moveTo(-5, 22);
       ctx.lineTo(5, 22);
     } else if (hunger > 80) {
-      // Hungry: wavy line
       ctx.moveTo(-10, 20);
       ctx.quadraticCurveTo(-5, 15, 0, 20);
       ctx.quadraticCurveTo(5, 25, 10, 20);
     } else if (mood > 50) {
-      // Normal smile
       ctx.arc(0, 15, 12, 0, Math.PI);
     } else {
-      // Neutral
       ctx.moveTo(-8, 20);
       ctx.lineTo(8, 20);
     }
     ctx.stroke();
     
-    // Add sparkle for happy state
+    // Sparkle for happy state
     if (this.isHappy) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       const sparkleTime = Date.now() * 0.003;

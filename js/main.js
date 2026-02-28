@@ -124,6 +124,28 @@ class ParticleSystem {
       gravity: 0.2
     });
   }
+
+  happyEffect(x, y) {
+    // Happy particles - hearts and sparkles
+    this.emit(x, y - 30, {
+      count: 8,
+      speed: 3,
+      size: 4,
+      color: '#FF69B4',
+      life: 0.7,
+      decay: 0.025,
+      gravity: -0.08
+    });
+    this.emit(x, y - 20, {
+      count: 6,
+      speed: 2,
+      size: 3,
+      color: '#FFD700',
+      life: 0.5,
+      decay: 0.03,
+      gravity: -0.05
+    });
+  }
 }
 
 // Screen shake effect
@@ -161,12 +183,87 @@ class ScreenShake {
   }
 }
 
-// Background environment - cosmic beach theme
+// Screen pulse effect (for sound-like visual feedback)
+class ScreenPulse {
+  constructor(canvas) {
+    this.canvas = canvas;
+ulseIntensity = 0;
+    this.pulseColor = 'rgba    this.p(255, 255, 255, 0.3)';
+  }
+
+  pulse(color = 'rgba(255, 255, 255, 0.3)', intensity = 0.3) {
+    this.pulseIntensity = intensity;
+    this.pulseColor = color;
+  }
+
+  update() {
+    if (this.pulseIntensity > 0.01) {
+      this.pulseIntensity *= 0.9;
+    } else {
+      this.pulseIntensity = 0;
+    }
+  }
+
+  draw(ctx, width, height) {
+    if (this.pulseIntensity > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = this.pulseIntensity;
+      ctx.fillStyle = this.pulseColor;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+  }
+}
+
+// Ripple effect (for sound-like visual feedback)
+class RippleEffect {
+  constructor() {
+    this.ripples = [];
+  }
+
+  addRipple(x, y) {
+    this.ripples.push({
+      x, y,
+      radius: 0,
+      maxRadius: 100,
+      alpha: 0.5,
+      speed: 8
+    });
+  }
+
+  update() {
+    this.ripples = this.ripples.filter(r => {
+      r.radius += r.speed;
+      r.alpha = 0.5 * (1 - r.radius / r.maxRadius);
+      return r.radius < r.maxRadius;
+    });
+  }
+
+  draw(ctx) {
+    this.ripples.forEach(r => {
+      if (r.alpha > 0) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${r.alpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+  }
+}
+
+// Background environment with parallax
 class BackgroundEnvironment {
   constructor(canvas) {
     this.canvas = canvas;
     this.stars = [];
     this.clouds = [];
+    this.parallaxOffsetX = 0;
+    this.parallaxOffsetY = 0;
+    this.lastBlobX = 0;
+    this.lastBlobY = 0;
     this.init();
   }
 
@@ -178,7 +275,8 @@ class BackgroundEnvironment {
         y: Math.random() * 1000,
         size: Math.random() * 2 + 0.5,
         twinkle: Math.random() * Math.PI * 2,
-        speed: Math.random() * 0.02 + 0.01
+        speed: Math.random() * 0.02 + 0.01,
+        parallaxFactor: 0.1 // Stars move less (farther)
       });
     }
     // Create floating clouds
@@ -188,12 +286,32 @@ class BackgroundEnvironment {
         y: Math.random() * 400 + 50,
         size: Math.random() * 60 + 40,
         speed: Math.random() * 0.3 + 0.1,
-        opacity: Math.random() * 0.15 + 0.05
+        opacity: Math.random() * 0.15 + 0.05,
+        parallaxFactor: 0.3 // Clouds move moderately
       });
     }
   }
 
-  update() {
+  update(blobX, blobY) {
+    // Calculate parallax based on blob movement
+    const dx = blobX - this.lastBlobX;
+    const dy = blobY - this.lastBlobY;
+    
+    // Apply parallax with different factors
+    this.parallaxOffsetX += dx * 0.05;
+    this.parallaxOffsetY += dy * 0.03;
+    
+    // Clamp parallax
+    this.parallaxOffsetX = Math.max(-100, Math.min(100, this.parallaxOffsetX));
+    this.parallaxOffsetY = Math.max(-50, Math.min(50, this.parallaxOffsetY));
+    
+    // Decay parallax back to center
+    this.parallaxOffsetX *= 0.98;
+    this.parallaxOffsetY *= 0.98;
+    
+    this.lastBlobX = blobX;
+    this.lastBlobY = blobY;
+    
     // Twinkle stars
     this.stars.forEach(s => s.twinkle += s.speed);
     // Float clouds
@@ -212,22 +330,25 @@ class BackgroundEnvironment {
     ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, width, height * 0.7);
 
-    // Draw stars
+    // Draw stars with parallax
     this.stars.forEach(s => {
       const alpha = 0.4 + Math.sin(s.twinkle) * 0.3;
       ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
       ctx.beginPath();
-      ctx.arc(s.x % width, s.y, s.size, 0, Math.PI * 2);
+      const x = (s.x + this.parallaxOffsetX * s.parallaxFactor) % width;
+      ctx.arc(x, s.y + this.parallaxOffsetY * s.parallaxFactor, s.size, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // Draw clouds
+    // Draw clouds with parallax
     this.clouds.forEach(c => {
       ctx.fillStyle = `rgba(255, 255, 255, ${c.opacity})`;
       ctx.beginPath();
-      ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
-      ctx.arc(c.x + c.size * 0.6, c.y - c.size * 0.2, c.size * 0.7, 0, Math.PI * 2);
-      ctx.arc(c.x + c.size * 1.2, c.y, c.size * 0.8, 0, Math.PI * 2);
+      const x = c.x + this.parallaxOffsetX * c.parallaxFactor;
+      const y = c.y + this.parallaxOffsetY * c.parallaxFactor;
+      ctx.arc(x, y, c.size, 0, Math.PI * 2);
+      ctx.arc(x + c.size * 0.6, y - c.size * 0.2, c.size * 0.7, 0, Math.PI * 2);
+      ctx.arc(x + c.size * 1.2, y, c.size * 0.8, 0, Math.PI * 2);
       ctx.fill();
     });
 
@@ -282,6 +403,8 @@ class TouchBlobApp {
     // Polish systems
     this.particles = new ParticleSystem();
     this.screenShake = new ScreenShake();
+    this.screenPulse = new ScreenPulse(this.canvas);
+    this.rippleEffect = new RippleEffect();
     this.environment = new BackgroundEnvironment(this.canvas);
     
     // Touch input
@@ -325,7 +448,9 @@ class TouchBlobApp {
     this.blob.update(deltaTime);
     this.particles.update();
     this.screenShake.update();
-    this.environment.update();
+    this.screenPulse.update();
+    this.rippleEffect.update();
+    this.environment.update(this.blob.x, this.blob.y);
     
     // Update stats every 10 seconds
     this.statsTimer += deltaTime;
@@ -351,12 +476,18 @@ class TouchBlobApp {
     // Draw environment background
     this.environment.draw(ctx, width, height);
     
+    // Draw ripples behind blob
+    this.rippleEffect.draw(ctx);
+    
     // Draw particles behind blob
     this.particles.draw(ctx);
     
     // Draw blob with glow
     this.drawBlobGlow();
     this.blob.draw();
+    
+    // Draw screen pulse overlay
+    this.screenPulse.draw(ctx, width, height);
     
     // Draw stats overlay
     this.drawStats();
