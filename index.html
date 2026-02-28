@@ -8,10 +8,50 @@
 </head>
 <body>
   <canvas id="game"></canvas>
+  
+  <!-- Stats Indicator -->
+  <div id="stats-indicator">
+    <div class="stat-item" data-stat="mood" title="Mood">
+      <span class="stat-icon">😊</span>
+      <div class="stat-bar"><div class="stat-fill"></div></div>
+    </div>
+    <div class="stat-item" data-stat="energy" title="Energy">
+      <span class="stat-icon">⚡</span>
+      <div class="stat-bar"><div class="stat-fill"></div></div>
+    </div>
+    <div class="stat-item" data-stat="hunger" title="Hunger">
+      <span class="stat-icon">🍔</span>
+      <div class="stat-bar"><div class="stat-fill"></div></div>
+    </div>
+  </div>
+  
+  <!-- Color Picker Toggle -->
+  <button id="color-toggle" title="Change blob color">🎨</button>
+  
+  <!-- Color Picker Panel -->
+  <div id="color-picker" class="hidden">
+    <h3>Blob Color</h3>
+    <div class="color-options">
+      <button class="color-btn" data-color="#4ECDC4" style="background:#4ECDC4" title="Teal"></button>
+      <button class="color-btn" data-color="#FF6B6B" style="background:#FF6B6B" title="Coral"></button>
+      <button class="color-btn" data-color="#95E1D3" style="background:#95E1D3" title="Mint"></button>
+      <button class="color-btn" data-color="#F38181" style="background:#F38181" title="Salmon"></button>
+      <button class="color-btn" data-color="#AA96DA" style="background:#AA96DA" title="Lavender"></button>
+      <button class="color-btn" data-color="#FCBAD3" style="background:#FCBAD3" title="Pink"></button>
+      <button class="color-btn" data-color="#A8E6CF" style="background:#A8E6CF" title="Seafoam"></button>
+      <button class="color-btn" data-color="#FFD93D" style="background:#FFD93D" title="Yellow"></button>
+    </div>
+    <p class="color-hint">Tap blob to interact!</p>
+  </div>
+  
+  <!-- Interaction Feedback -->
+  <div id="feedback"></div>
+  
   <script src="js/animations.js"></script>
   <script src="js/state.js"></script>
   <script src="js/touch.js"></script>
   <script src="js/blob.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
 </body>
 </html>

@@ -13,10 +13,259 @@ html, body {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+  font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
 #game {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Stats Indicator */
+#stats-indicator {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  gap: 12px;
+  z-index: 100;
+  background: rgba(15, 15, 25, 0.85);
+  padding: 10px 14px;
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 36px;
+}
+
+.stat-icon {
+  font-size: 18px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.stat-item:hover .stat-icon {
+  transform: scale(1.2);
+}
+
+.stat-bar {
+  width: 32px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.stat-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease, background 0.3s ease;
+}
+
+/* Mood bar colors */
+.stat-item[data-stat="mood"] .stat-fill {
+  background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77);
+}
+
+/* Energy bar colors */
+.stat-item[data-stat="energy"] .stat-fill {
+  background: linear-gradient(90deg, #4ecdc4, #45b7d1, #96e6a1);
+}
+
+/* Hunger bar colors */
+.stat-item[data-stat="hunger"] .stat-fill {
+  background: linear-gradient(90deg, #6bcb77, #ffd93d, #ff6b6b);
+}
+
+/* Color Picker Toggle */
+#color-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(15, 15, 25, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  font-size: 20px;
+  transition: transform 0.2s ease, background 0.2s ease;
+  z-index: 101;
+}
+
+#color-toggle:hover {
+  transform: scale(1.1);
+  background: rgba(30, 30, 50, 0.9);
+}
+
+#color-toggle:active {
+  transform: scale(0.95);
+}
+
+/* Color Picker Panel */
+#color-picker {
+  position: fixed;
+  top: 70px;
+  right: 16px;
+  background: rgba(15, 15, 25, 0.92);
+  backdrop-filter: blur(15px);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 101;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#color-picker.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-10px);
+}
+
+#color-picker h3 {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.color-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.color-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.color-btn:hover {
+  transform: scale(1.15);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.color-btn:active {
+  transform: scale(0.9);
+}
+
+.color-hint {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  text-align: center;
+  margin-top: 12px;
+}
+
+/* Interaction Feedback */
+#feedback {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 200;
+}
+
+.feedback-text {
+  position: absolute;
+  font-size: 24px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  animation: feedbackPop 0.8s ease-out forwards;
+  white-space: nowrap;
+}
+
+@keyframes feedbackPop {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -80%) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -120%) scale(1);
+  }
+}
+
+/* Floating hearts for positive interactions */
+.floating-heart {
+  position: absolute;
+  font-size: 20px;
+  animation: floatUp 1s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-80px) scale(1.5);
+  }
+}
+
+/* Subtle pulse animation for low stats */
+.stat-item.warning .stat-icon {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* Micro-interaction: Blob gets a subtle glow when happy */
+.blob-happy-glow {
+  animation: happyGlow 2s ease-in-out infinite;
+}
+
+@keyframes happyGlow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(255, 217, 61, 0.3)); }
+  50% { filter: drop-shadow(0 0 20px rgba(255, 217, 61, 0.6)); }
+}
+
+/* Sparkle effect */
+.sparkle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #fff;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: sparkleAnim 0.6s ease-out forwards;
+}
+
+@keyframes sparkleAnim {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0) translate(var(--tx), var(--ty));
+  }
 }
