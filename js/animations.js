@@ -8,7 +8,7 @@ class AnimationManager {
     this.currentFrame = 0;
     this.frameIndex = 0;
     this.frameTimer = 0;
-    this.frameSpeed = 150; // ms per frame (base speed)
+    this.frameSpeed = 200; // ms per frame (slower for smooth idle)
     this.isPlaying = true;
     this.loaded = false;
     
@@ -84,8 +84,7 @@ class AnimationManager {
       this.animations[name].frames = dirFrames;
     }
     
-    // Always reset animation state when changing animation or direction
-    if (this.currentAnimation !== name || this.currentDirection !== direction) {
+    if (this.currentAnimation !== name) {
       this.currentAnimation = name;
       this.currentDirection = direction;
       this.frameIndex = 0;
@@ -99,12 +98,12 @@ class AnimationManager {
     const anim = this.animations[this.currentAnimation];
     if (!anim || !anim.frames || anim.frames.length === 0) return;
 
-    // Use instance frameSpeed (configurable), with idle being slower
-    const speed = this.currentAnimation === 'idle' ? this.frameSpeed * 1.5 : this.frameSpeed;
+    // Adjust speed based on animation
+    const speed = this.currentAnimation === 'idle' ? 300 : 150;
     this.frameTimer += deltaTime;
     
     if (this.frameTimer >= speed) {
-      this.frameTimer -= speed; // Preserve excess time for smooth animation
+      this.frameTimer = 0;
       this.frameIndex++;
       
       if (this.frameIndex >= anim.frames.length) {
@@ -113,13 +112,8 @@ class AnimationManager {
           this.frameIndex = 0;
         } else {
           // One-shot animation, return to idle
-          this.frameIndex = 0; // Reset to first frame
-          this.currentAnimation = 'idle';
-          this.frameTimer = 0; // Reset timer when transitioning
-          // Ensure idle animation is properly set
-          if (this.animations['idle']?.directions?.[this.currentDirection]) {
-            this.animations['idle'].frames = this.animations['idle'].directions[this.currentDirection];
-          }
+          this.frameIndex = Math.max(0, anim.frames.length - 1);
+          this.setAnimation('idle', this.currentDirection);
         }
       }
     }
